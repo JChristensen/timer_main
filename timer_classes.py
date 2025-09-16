@@ -1,12 +1,14 @@
 """Classes for the timer_main program."""
 
+import argparse
 import logging
-import pprint
+import logging.handlers
+import os
 import sys
 import time
 import yaml
 
-logger = logging.getLogger('timer_main')
+logger = logging.getLogger('timer_main.py')
 
 class Remote:
     """A single remote unit that we control with a schedule."""
@@ -57,21 +59,53 @@ class Remote:
 
             if current_sched != self.last_sched:
                 self.last_sched = current_sched
-                print(f'New schedule in effect: {self.name} {self.last_sched}')
+                print(f'Schedule in effect: {self.name} {self.last_sched}')
 
     def print(self):
         print(f'\nRemote name: {self.name}')
         print(f'Random factor: {self.random}')
         print('Schedule:')
-        for s in self.sched:
+        for s in sorted(self.sched):
             print(s)
 
 
 class Controller:
     """A class to manage and communicate with one or more remotes."""
 
-    def __init__(self):
+    def __init__(self, mainfile):
         self.remotes = []
+
+        # various informational stuff
+        self.progpath = os.path.dirname(os.path.realpath(mainfile))
+        self.prognamepy = os.path.basename(sys.argv[0])  # name.py
+        self.progname = self.prognamepy.split(sep='.')[0]     # name only
+        # get the git hash for the current commit
+        cmd = os.popen(f'git -C {self.progpath} log -1 --format="%h %ai %an"')
+        self.git_hash = cmd.read().replace('\n', '')
+        cmd.close()
+        self.write_pidfile()
+        version_info = f'{self.prognamepy} PID {str(os.getpid())} {self.git_hash}'
+        log_filename = f'{self.progpath}{os.sep}.{self.progname}.log'
+
+        # set up logging
+        global logger
+        logger = logging.getLogger(self.prognamepy)
+        logger.setLevel(logging.DEBUG)
+        handler = logging.handlers.TimedRotatingFileHandler(
+                log_filename, when='midnight', backupCount=7)
+        logger.addHandler(handler)
+        f = logging.Formatter(
+                fmt='%(asctime)s\t%(levelname)s\t%(name)s\t%(message)s',
+                datefmt='%Y-%m-%d %H:%M:%S')
+        handler.setFormatter(f)
+        logger.info(f'Start {version_info}')
+
+        # process command line arguments
+        parser = argparse.ArgumentParser(
+            description='Timer main: Control program for remote timers.',
+            epilog='Manages schedules and communicates with one or more remote timers.')
+        parser.add_argument("-s", "--syntax", help="Check config file for syntax errors and exit.", action="store_true")
+        self.args = parser.parse_args()
 
     def init_controller(self):
         if self.remotes:
@@ -79,25 +113,36 @@ class Controller:
                 del r
             self.remotes = []
 
-        # read the config file and convert to a dictionary object (d)
-        filename = 'config.yaml'
-        with open(filename, 'r') as yamlfile:
-            d = yaml.safe_load(yamlfile)
+        # read the config file and convert to a dictionary object (d).
+        # if not just checking syntax, and parsing the config file fails,
+        # then the program will continue running but doing nothing.
+        try:
+            filename = 'config.yaml'
+            d = {}
+            with open(filename, 'r') as yamlfile:
+                d = yaml.safe_load(yamlfile)
+                logger.debug('Config file parsed successfully.')
+        except Exception as e:
+            logger.error('Error parsing config file!')
+            if self.args.syntax:
+                print(f'\nParse failed!\n\n{str(e)}')
+                sys.exit(1)
 
         # instantiate Remote objects and add them to the list
         for k, v in d.items():
             self.remotes.append(Remote(k, v))
 
+        if self.args.syntax:
+            print('\nConfiguration file parsed successfully!')
+            for r in self.remotes:
+                r.print()
+            logger.info('Exiting: Syntax check only.')
+            sys.exit(0)
+
         for r in self.remotes:
             r.process()
 
-        # for testing only
-        print(f'Remote count: {len(self.remotes)}')
-        for r in self.remotes:
-            r.print()
-
     def process(self):
-        print(f'Remote count: {len(self.remotes)}')
         for r in self.remotes:
             r.process()
 
@@ -106,17 +151,12 @@ class Controller:
         now = time.time()
         l = time.localtime(now)
         sleep_sec = 60 - l.tm_sec
-        print(time.strftime("%F %T"), l.tm_hour*100+l.tm_min)
         time.sleep(sleep_sec)
+        #print(time.strftime("%F %T"))
 
-    def check_config(self):
-    # check the config file for syntax errors
-        try:
-            filename = 'config.yaml'
-            with open(filename, 'r') as yamlfile:
-                d = yaml.safe_load(yamlfile)
-            print('\nConfiguration file parsed successfully!\n')
-            pprint.pprint(d)
-        except Exception as e:
-            print(f'\nParse failed!\n\n{str(e)}')
-            sys.exit(1)
+    def write_pidfile(self):
+        with open (f'{self.progname}.pid', 'w') as p:
+            p.write(f'{str(os.getpid())}\n')
+
+    def remove_pidfile(self):
+        os.remove(f'{self.progname}.pid')

@@ -1,13 +1,12 @@
-#!/usr/bin/python3
+#!/home/jack/.venv/bin/python3
 #import random
 #import string
 #''.join(random.choices(string.hexdigits, k=16))
 
-import argparse
 import logging
-import os
-import pprint
+import paho.mqtt.client as mqtt
 import signal
+import socket
 import sys
 import time
 import yaml
@@ -16,7 +15,9 @@ import timer_classes as timer
 
 def main():
     global controller
-    controller = timer.Controller()
+    global logger
+    controller = timer.Controller(__file__)
+    logger = logging.getLogger('timer_main.py')
 
     # register signal handlers
     signal.signal(signal.SIGINT,  sigint_handler)
@@ -25,70 +26,81 @@ def main():
 
     controller.init_controller()
 
+    # initialize mqtt
+    mqClient = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, \
+        client_id=f'{controller.prognamepy}@{socket.gethostname()}', clean_session=True)
+    mqClient.on_connect = on_connect
+    mqClient.on_message = on_message
+
+    # try to connect to the broker
+    retryInterval = 10
+    nTry = 0
+    connected = False
+    while (not connected):
+        try:
+            nTry += 1
+            mqClient.connect('z21')
+            connected = True
+        except Exception as e:
+            logMsg = f'Connect to broker failed: {str(e)}, Retry in {str(retryInterval)} seconds.'
+            logger.error(logMsg)
+            time.sleep(retryInterval)
+            if (nTry == 36):
+                retryInterval = 3600
+            elif (nTry == 24):
+                retryInterval = 300
+            elif (nTry == 12):
+                retryInterval = 60
+
+    mqClient.loop_start()
+
     while True:
         controller.sleep_minute()
         controller.process()
 
 
-def setup():
-    """Initialize logging, process cmdline args."""
+# The callback for when the client receives a CONNACK response from the server.
+def on_connect(mqClient, userdata, flags, reason_code, properties):
+    global logger
+    logger.info(f'Connect to broker: {str(reason_code)}')
+    # Subscribing in on_connect() means that if we lose the connection and
+    # reconnect then subscriptions will be renewed.
+    mqClient.subscribe('timer_main')
 
-    # various informational stuff
-    progpath = os.path.dirname(os.path.realpath(__file__))
-    prognamepy = os.path.basename(sys.argv[0])  # name.py
-    progname = prognamepy.split(sep='.')[0]     # name only
-    # get the git hash for the current commit
-    cmd = os.popen(f'git -C {progpath} log -1 --format="%h %ai"')
-    git_hash = cmd.read().replace('\n', '')
-    cmd.close()
-    version_info = f'{prognamepy} {git_hash}'
-    log_filename = f'{progpath}{os.sep}.{progname}.log'
 
-    # set up logging
-    myLog = logging.getLogger(prognamepy)
-    myLog.setLevel(logging.DEBUG)
-    handler = logging.handlers.TimedRotatingFileHandler(
-            log_filename, when='midnight', backupCount=7)
-    myLog.addHandler(handler)
-    f = logging.Formatter(
-            fmt='%(asctime)s\t%(levelname)s\t%(name)s\t%(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S')
-    handler.setFormatter(f)
-    pid = str(os.getpid())
-    myLog.info(f'Start {version_info} PID {pid}')
-    with open (f'{progname}.pid', 'w') as p:
-        p.write(f'{pid}\n')
-
-    # process command line arguments
-    parser = argparse.ArgumentParser(
-        description='Timer main: Control program for remote timers.',
-        epilog='Manages schedules and communicates with one or more remote timers.')
-    parser.add_argument("-s", "--syntax", help="Check config file for syntax errors and exit.", action="store_true")
-    args = parser.parse_args()
+# The callback for when a PUBLISH message is received from the server.
+def on_message(mqClient, userdata, msg):
+    global logger
+    try:
+        msgText = msg.payload.decode('utf-8')
+        ellipsis = '…' if len(msgText) > 32 else ''
+        logger.debug(f'Received [{msg.topic}] {msgText[:32]}{ellipsis}')
+    except Exception as e:
+        logger.error(f'Message receive fail: {str(e)}')
+        return
 
 
 # signal handler for SIGINT: terminate program
 def sigint_handler(signal, frame):
-    # global myLog
-    # myLog.info('Received SIGINT, exiting.')
-    print('Received SIGINT, exiting.')
+    global logger
+    logger.info('Received SIGINT, exiting.')
+    controller.remove_pidfile()
     sys.exit(0)
 
 
 # signal handler for SIGTERM: terminate program
 def sigterm_handler(signal, frame):
-    # global myLog
-    # myLog.info('Received SIGTERM, exiting.')
-    print('Received SIGTERM, exiting.')
+    global logger
+    logger.info('Received SIGTERM, exiting.')
+    controller.remove_pidfile()
     sys.exit(0)
 
 
 # signal handler for SIGHUP: reprocess config file
 def sighup_handler(signal, frame):
     global controller
-    # global myLog
-    # myLog.info('Received SIGHUP, reloading configuration.')
-    print('Received SIGHUP, reloading configuration.')
+    global logger
+    logger.info('Received SIGHUP, reloading configuration.')
     controller.init_controller()
 
 

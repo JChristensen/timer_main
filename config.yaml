@@ -38,4 +38,6 @@ living_room:
 battery_charger:
   sched: [
     [845, on, tue],
-    [850, off, tue] ]
+    [850, off, tue],
+    [1528, on, tue],
+    [1530, off, tue] ]
