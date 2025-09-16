@@ -1,0 +1,41 @@
+# YAML configuration file for remote timers.
+#
+# Each timer is denoted by a unique name starting in column 1.
+# Each timer has the following properties. Property names must be lower case:
+#   sched  - A list of lists, denoting on/off times and days.
+#   random - An optional property which defaults to zero if not given.
+#            This is the maximum number of minutes the time may be adjusted
+#            to give a "lived-in" look when timing lights. A different
+#            random adjustment is calculated daily.
+#            The random feature is not implemented yet.
+#
+# Each sched sub-list consists of three positional items, in this order:
+#   Time  - A 24-hour time, represented as an integer, hhmm, without
+#           a colon. Do not use leading zeros; this will cause the time
+#           to be interpreted as octal!
+#   State - On, off, true or false. Case insensitive.
+#   Days  - A space-separated list of days giving the days the schedule
+#           item is effective. Case insensitive.
+#           Allowed values are sun, mon, tue, wed, thu, fri, sat, all,
+#           weekdays and weekends. Other values are silently ignored.
+
+# Electricity costs more from 1400-1900 on weekdays.
+dehumidifier:
+  sched: [
+    [1400, off, weekdays],
+    [1900, on,  weekdays] ]
+  random: 0
+
+# Apply +/- 10 minutes to the times for the living room.
+living_room:
+  random: 10
+  sched: [  # not in order but that is ok
+    [1700, on,  all],
+    [2000, off, all],
+    [900, off, all],
+    [800, on,  all] ]
+
+battery_charger:
+  sched: [
+    [845, on, tue],
+    [850, off, tue] ]
