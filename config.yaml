@@ -19,25 +19,22 @@
 #           Allowed values are sun, mon, tue, wed, thu, fri, sat, all,
 #           weekdays and weekends. Other values are silently ignored.
 
-# Electricity costs more from 1400-1900 on weekdays.
-dehumidifier:
+picow2:
   sched: [
-    [1400, off, weekdays],
-    [1900, on,  weekdays] ]
-  random: 0
-
-# Apply +/- 10 minutes to the times for the living room.
-living_room:
-  random: 10
-  sched: [  # not in order but that is ok
-    [1700, on,  all],
-    [2000, off, all],
-    [900, off, all],
-    [800, on,  all] ]
-
-battery_charger:
-  sched: [
-    [845, on, tue],
-    [850, off, tue],
-    [1528, on, tue],
-    [1530, off, tue] ]
+    [1440, off, wed],
+    [1445, on, wed], 
+    [1450, off, wed],
+    [1455, on, wed],
+    [1500, off, wed], 
+    [1505, on, wed],
+    [1510, off, wed], 
+    [1515, on, wed],
+    [1520, off, wed], 
+    [1525, on, wed],
+    [1530, off, wed], 
+    [1535, on, wed],
+    [1540, off, wed], 
+    [1545, on, wed],
+    [1550, off, wed], 
+    [1555, on, wed],
+    [1600, off, wed] ]

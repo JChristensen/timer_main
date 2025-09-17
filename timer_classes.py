@@ -3,7 +3,10 @@
 import argparse
 import logging
 import logging.handlers
+import paho.mqtt.client as mqtt
 import os
+import random
+import socket
 import sys
 import time
 import yaml
@@ -59,7 +62,10 @@ class Remote:
 
             if current_sched != self.last_sched:
                 self.last_sched = current_sched
-                print(f'Schedule in effect: {self.name} {self.last_sched}')
+                #print(f'Schedule in effect: {self.name} {self.last_sched}')
+                return self.last_sched
+            else:
+                return []
 
     def print(self):
         print(f'\nRemote name: {self.name}')
@@ -74,6 +80,8 @@ class Controller:
 
     def __init__(self, mainfile):
         self.remotes = []
+        self.mqClient = None
+        self.retry = {}
 
         # various informational stuff
         self.progpath = os.path.dirname(os.path.realpath(mainfile))
@@ -89,13 +97,13 @@ class Controller:
 
         # set up logging
         global logger
-        logger = logging.getLogger(self.prognamepy)
+        logger = logging.getLogger(self.progname)
         logger.setLevel(logging.DEBUG)
         handler = logging.handlers.TimedRotatingFileHandler(
                 log_filename, when='midnight', backupCount=7)
         logger.addHandler(handler)
         f = logging.Formatter(
-                fmt='%(asctime)s\t%(levelname)s\t%(name)s\t%(message)s',
+                fmt='%(asctime)s.%(msecs)d\t%(levelname)s\t%(module)s\t%(message)s',
                 datefmt='%Y-%m-%d %H:%M:%S')
         handler.setFormatter(f)
         logger.info(f'Start {version_info}')
@@ -106,6 +114,9 @@ class Controller:
             epilog='Manages schedules and communicates with one or more remote timers.')
         parser.add_argument("-s", "--syntax", help="Check config file for syntax errors and exit.", action="store_true")
         self.args = parser.parse_args()
+
+        if not self.args.syntax:
+            self.init_mqtt()
 
     def init_controller(self):
         if self.remotes:
@@ -139,12 +150,93 @@ class Controller:
             logger.info('Exiting: Syntax check only.')
             sys.exit(0)
 
-        for r in self.remotes:
-            r.process()
+        self.process()
+
+    def init_mqtt(self):
+        self.mqClient = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, \
+            client_id=f'{self.prognamepy}@{socket.gethostname()}', clean_session=True)
+        self.mqClient.on_connect = self.on_connect
+        self.mqClient.on_message = self.on_message
+
+        # connect to broker
+        retryInterval = 10
+        nTry = 0
+        connected = False
+        while (not connected):
+            try:
+                nTry += 1
+                self.mqClient.connect('z21', 1883)
+                connected = True
+            except Exception as e:
+                logMsg = f'Connect to broker failed: {str(e)}, Retry in {str(retryInterval)} seconds.'
+                logger.error(logMsg)
+                time.sleep(retryInterval)
+                if (nTry == 36):
+                    retryInterval = 3600
+                elif (nTry == 24):
+                    retryInterval = 300
+                elif (nTry == 12):
+                    retryInterval = 60
+
+        self.mqClient.loop_start()
+        time.sleep(1)   # time to process the broker connect
+
+    def on_connect(self, mqClient, userdata, flags, reason_code, properties):
+        """The callback for when the client receives a CONNACK response from the server."""
+        global logger
+        logger.info(f'Connect to broker: {str(reason_code)}')
+        # Subscribing in on_connect() means that if we lose the connection and
+        # reconnect then subscriptions will be renewed.
+        self.mqClient.subscribe('timer_main')
+
+    def on_message(self, mqClient, userdata, msg):
+        """The callback for when a PUBLISH message is received from the server."""
+        global logger
+        try:
+            msgText = msg.payload.decode('utf-8')
+            ellipsis = '…' if len(msgText) > 32 else ''
+            logger.debug(f'Received [{msg.topic}] {msgText}')
+            # take the message apart, space-delimited
+            # two possible messages:
+            #   hostname ack hexkey hh:mm:ss
+            #   hostname reset hh:mm:ss
+            msg = msgText.split()
+            if msg[1] == 'ack':
+                if msg[2] in self.retry:
+                    del self.retry[msg[2]]
+        except Exception as e:
+            logger.error(f'Message receive fail: {str(e)}')
+            return
 
     def process(self):
         for r in self.remotes:
-            r.process()
+            sched = r.process()
+            if sched:
+                hexkey = f'{random.randrange(pow(2,32)):08x}'
+                #add to the retry dict hexkey: [retries_left, hostname, sched_list]
+                self.retry[hexkey] = [5, r.name, sched]
+                logger.debug(f'Publish {r.name} {sched} {hexkey}')
+                self.mqClient.publish(r.name, f'{sched[1]} {hexkey}')
+
+    def process_retries(self):
+        # we build this list of dictionary items to be removed
+        remove = []
+
+        for hexkey, v in self.retry.items():
+            hostname = v[1]
+            sched = v[2]
+            v[0] -= 1
+            if v[0] > 0:
+                logger.debug(f'Retry {hostname} {sched} {hexkey}')
+                self.mqClient.publish(hostname, f'{sched[1]} {hexkey}')
+            else:
+                logger.warning(f'Retries exhausted for {hexkey} {v}')
+                remove.append(hexkey)
+
+        # now we can remove the exhaused dictionary items
+        # (python does not allow a dictionary to change size during iteration)
+        for k in remove:
+            del self.retry[k]
 
     def sleep_minute(self):
         """Sleep until the minute rolls over."""
