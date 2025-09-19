@@ -1,7 +1,20 @@
-# YAML configuration file for remote timers.
-#
-# Each timer is denoted by a unique name starting in column 1.
-# Each timer has the following properties. Property names must be lower case:
+# YAML configuration file for the timer_main.py program.
+# Sending SIGHUP to the program will cause it to reload the configuration
+# file. This should only be used to update schedules. If changes are
+# made to the MQTT parameters, then the program should be restarted.
+ 
+# The mqtt block contains the hostname and port for the MQTT broker,
+# and the topic the program will subscribe to, in order to listen for
+# responses from the remotes:
+
+mqtt:
+  broker: z21
+  port: 1883
+  topic: timer_main
+
+# The remotes block contains a sub-block for each remote timer to be managed. 
+# Timer names must be unique. Each timer has the following properties
+# (property names must be lower case):
 #   sched   - A list of lists, denoting on/off times and days. Details below.
 #   enabled - Optional true or false; defaults to true if not given,
 #             case insensitive.
@@ -11,7 +24,7 @@
 #             random adjustment is calculated daily.
 #             The random feature is not implemented yet.
 #
-# Each sched sub-list consists of three positional items, in this order:
+# Each sched sub-list item consists of three positional items, in this order:
 #   Time  - A 24-hour time, represented as an integer, hhmm, without
 #           a colon. Do not use leading zeros; this will cause the time
 #           to be interpreted as octal!
@@ -21,36 +34,70 @@
 #           Allowed values are sun, mon, tue, wed, thu, fri, sat, all,
 #           weekdays and weekends. Other values are silently ignored.
 
-picow2:
-  sched: [
-    [705, on, fri],
-    [710, off, fri],
-    [715, on, fri], 
-    [720, off, fri],
-    [725, on, fri], 
-    [730, off, fri],
-    [735, on, fri], 
-    [740, off, fri],
-    [745, on, fri], 
-    [750, off, fri],
-    [755, on, fri], 
-    [800, off, fri],
-    [805, on, fri],
-    [810, off, fri],
-    [815, on, fri], 
-    [820, off, fri],
-    [825, on, fri], 
-    [830, off, fri],
-    [835, on, fri], 
-    [840, off, fri],
-    [845, on, fri], 
-    [850, off, fri],
-    [855, on, fri], 
-    [900, off, fri] ]
+remotes:
+  dehumid:
+    enabled: false
+    sched: [
+      [1400, off, weekdays],
+      [1900, on,  weekdays] ]
 
-lamp_timer:
+  picow2:
+    sched: [
+      [1405, on, fri],
+      [1410, off, fri],
+      [1415, on, fri], 
+      [1420, off, fri],
+      [1425, on, fri], 
+      [1430, off, fri],
+      [1435, on, fri], 
+      [1440, off, fri],
+      [1445, on, fri], 
+      [1450, off, fri],
+      [1455, on, fri], 
+      [1500, off, fri],
+      [1505, on, fri],
+      [1510, off, fri],
+      [1515, on, fri], 
+      [1520, off, fri],
+      [1525, on, fri], 
+      [1530, off, fri],
+      [1535, on, fri], 
+      [1540, off, fri],
+      [1545, on, fri], 
+      [1550, off, fri],
+      [1555, on, fri], 
+      [1600, off, fri],
+      [1615, on, fri],
+      [1630, off, fri],
+      [1645, on, fri],
+      [1700, off, fri],
+      [1715, on, fri],
+      [1730, off, fri],
+      [1745, on, fri],
+      [1800, off, fri],
+      [1815, on, fri],
+      [1830, off, fri],
+      [1845, on, fri],
+      [1900, off, fri],
+      [1915, on, fri],
+      [1930, off, fri],
+      [1945, on, fri],
+      [2000, off, fri],
+      [2015, on, fri],
+      [2030, off, fri],
+      [2045, on, fri],
+      [2100, off, fri],
+      [2115, on, fri],
+      [2130, off, fri],
+      [2145, on, fri],
+      [2200, off, fri],
+      [2215, on, fri],
+      [2230, off, fri],
+      [2245, on, fri] ]
+
+  lamp_timer:
     enabled: false
     random: 30
     sched: [
-        [1800, on, all],
-        [1130, off, all] ]
+      [1800, on, all],
+      [1430, off, all] ]

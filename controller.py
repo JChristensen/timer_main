@@ -45,7 +45,6 @@ class Controller:
         cmd = os.popen(f'git -C {self.progpath} log -1 --format="%h %ai %an"')
         self.git_hash = cmd.read().replace('\n', '')
         cmd.close()
-        self.write_pidfile()
         version_info = f'{self.prognamepy} PID {str(os.getpid())} {self.git_hash}'
         log_filename = f'{self.progpath}{os.sep}.{self.progname}.log'
 
@@ -71,6 +70,7 @@ class Controller:
         parser.add_argument('-c', '--config', default='config.yaml',
             help='Optional config file name, defaults to config.yaml.')
         self.args = parser.parse_args()
+        self.write_pidfile()
 
 
     def init_controller(self):
@@ -300,10 +300,12 @@ class Controller:
 
     def write_pidfile(self):
         """write our pid to a file."""
-        with open (f'{self.progname}.pid', 'w') as p:
-            p.write(f'{str(os.getpid())}\n')
+        if not self.args.syntax:
+            with open (f'{self.progname}.pid', 'w') as p:
+                p.write(f'{str(os.getpid())}\n')
 
 
     def remove_pidfile(self):
         """remove the pid file. call when the program is terminating."""
-        os.remove(f'{self.progname}.pid')
+        if not self.args.syntax:
+            os.remove(f'{self.progname}.pid')
