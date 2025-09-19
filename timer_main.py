@@ -10,7 +10,7 @@ import sys
 import time
 import yaml
 
-import timer_classes as timer
+import controller as timer
 
 def main():
     global controller
