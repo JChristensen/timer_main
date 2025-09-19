@@ -1,7 +1,7 @@
 import logging
 import time
 
-logger = logging.getLogger('timer_main.py')
+logger = logging.getLogger('timer_main')
 
 class Remote:
     """A single remote unit that we control with a schedule."""
@@ -39,6 +39,7 @@ class Remote:
             elif s[2] == 'weekends':
                 s[2] = 'sat sun'
 
+
     def process(self):
         """process schedules for a given remote. if the current schedule
         is different from the last time we checked, then return the list
@@ -71,6 +72,7 @@ class Remote:
                 return self.last_sched
             else:
                 return []
+
 
     def print(self):
         """print the schedule and related info for this remote.

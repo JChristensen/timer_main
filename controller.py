@@ -11,14 +11,13 @@ import yaml
 
 import remote
 
-logger = logging.getLogger('timer_main.py')
+logger = logging.getLogger('timer_main')
 
 class Controller:
     """A class to manage and communicate with one or more remotes."""
 
     def __init__(self, mainfile):
-        """set up logging, process command line arguments, and unless
-        it's just a syntax check, start the mqtt client."""
+        """set up logging, process command line arguments"""
 
         # a list containing all the Remote objects
         self.remotes = []
@@ -31,9 +30,12 @@ class Controller:
         # because they have not responded to a message.
         self.offline = []
 
-        # the mqtt client and connected flag
+        # the mqtt client and associated parameters
         self.mqClient = None
         self.mqtt_connected = False
+        self.mq_broker = ''
+        self.mq_port = 0
+        self.mq_topic = ''
 
         # various informational stuff
         self.progpath = os.path.dirname(os.path.realpath(mainfile))
@@ -70,12 +72,11 @@ class Controller:
             help='Optional config file name, defaults to config.yaml.')
         self.args = parser.parse_args()
 
-        if not self.args.syntax:
-            self.init_mqtt()
 
     def init_controller(self):
-        """reads the configuration file and creates Remote objects. exits if
-        it's just a syntax check, else processes the remotes."""
+        """reads the configuration file and creates Remote objects.
+        exits if it's just a syntax check, else initializes mqtt and
+        processes the remotes."""
 
         # in case we were called to reload the config file, start with
         # a fresh list of remotes, clear the retry dict and offline list.
@@ -101,8 +102,25 @@ class Controller:
                 print(f'\nParse failed!\n{str(e)}')
                 sys.exit(1)
 
+        # get the mqtt and remotes blocks from the config file.
+        # if they do not exist, then generate an error.
+        try:
+            mqtt_d = d['mqtt']
+            remotes_d = d['remotes']
+            self.mq_broker = mqtt_d['broker']
+            self.mq_port = mqtt_d.get('port', 1883)
+            self.mq_topic = mqtt_d.get('topic', self.progname)
+        except Exception as e:
+            logger.error(f'Config file error: {str(e)}')
+            if self.args.syntax:
+                print(f'Config file error: {str(e)}')
+                sys.exit(1)
+            else:
+                # this return will cause the program to keep running but doing nothing.
+                return
+
         # instantiate Remote objects and add them to the list
-        for k, v in d.items():
+        for k, v in remotes_d.items():
             r = remote.Remote(k, v)
             if r.name == 'error':
                 if self.args.syntax:
@@ -120,8 +138,12 @@ class Controller:
             logger.info('Exiting: Syntax check only.')
             sys.exit(0)
 
-        # send the current state to all remotes
-        self.process()
+        if not self.args.syntax:
+            if not self.mqtt_connected:
+                self.init_mqtt()
+                time.sleep(1)
+            self.process()
+
 
     def init_mqtt(self):
         """set up callback functions and start mqtt."""
@@ -134,12 +156,13 @@ class Controller:
         self.mqClient.loop_start()
 
         # connect to broker
+        logger.info(f'MQTT broker {self.mq_broker}:{self.mq_port} topic {self.mq_topic}')
         retryInterval = 10
         nTry = 0
         while (not self.mqtt_connected):
             try:
                 nTry += 1
-                self.mqClient.connect('z21', 1883)
+                self.mqClient.connect(self.mq_broker, self.mq_port)
                 time.sleep(1)
             except Exception as e:
                 logMsg = f'Connect to broker failed: {str(e)}, Retry in {str(retryInterval)} seconds.'
@@ -155,14 +178,16 @@ class Controller:
         logger.info(f'Connect to broker: {str(reason_code)}')
         # Subscribing in on_connect() means that if we lose the connection and
         # reconnect then subscriptions will be renewed.
-        self.mqClient.subscribe('timer_main')
+        self.mqClient.subscribe(self.mq_topic)
         self.mqtt_connected = True
+
 
     def on_disconnect(self, mqClient, userdata, flags, reason_code, properties):
         """The callback for when the broker disconnects."""
         global logger
         self.mqtt_connected = False
         logger.warning(f'Broker disconnect!')
+
 
     def on_message(self, mqClient, userdata, msg):
         """The callback for when a PUBLISH message is received from the broker.
@@ -171,7 +196,7 @@ class Controller:
         try:
             msgText = msg.payload.decode('utf-8')
             ellipsis = '…' if len(msgText) > 32 else ''
-            logger.debug(f'Received [{msg.topic}] {msgText}')
+            logger.debug(f'Received {msgText}')
             # take the message apart, space-delimited
             # three possible messages:
             #   hostname ack serial hh:mm:ss
@@ -206,6 +231,7 @@ class Controller:
             logger.error(f'Message receive fail: {str(e)}')
             return
 
+
     def process(self):
         """process all the remotes by checking their schedules and sending
         new state if a new schedule is in effect.
@@ -230,6 +256,7 @@ class Controller:
                         self.retry[hex_serial] = [retry, r.name, sched]
                         self.mqClient.publish(r.name, f'{sched[1]} {hex_serial}')
                         logger.debug(f'Publish {r.name} {sched} {hex_serial}')
+
 
     def process_retries(self):
         """process the retry dictionary. resend any items that have
@@ -261,6 +288,7 @@ class Controller:
                 self.offline.append(hostname)
             logger.warning(f'{hostname} is not responding.')
 
+
     def sleep_minute(self):
         """Sleep until the minute rolls over."""
         now = time.time()
@@ -269,10 +297,12 @@ class Controller:
         time.sleep(sleep_sec)
         #print(time.strftime("%F %T"))
 
+
     def write_pidfile(self):
         """write our pid to a file."""
         with open (f'{self.progname}.pid', 'w') as p:
             p.write(f'{str(os.getpid())}\n')
+
 
     def remove_pidfile(self):
         """remove the pid file. call when the program is terminating."""

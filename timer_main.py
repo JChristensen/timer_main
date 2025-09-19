@@ -1,7 +1,5 @@
 #!/home/jack/.venv/bin/python3
-#
-# TODO: Add command line argument to read alternate config file.
-# TODO: Include mqtt parameters (broker, port, topic) in config file.
+
 # TODO: Process schedules a week at a time, not a day at a time.
 
 import logging
