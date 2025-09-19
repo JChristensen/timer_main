@@ -20,10 +20,20 @@ class Remote:
         """props is a dictionary with keys sched and random. random is
         optional. sched is a list of lists giving the schedule for the
         remote. each sub-list is [time, state, days]"""
-        self.name = name
-        self.enabled = props.get('enabled', True)
-        self.random = props.get('random', 0)
-        self.sched = sorted(props["sched"], reverse=True, key=lambda t: t[0])
+
+        # the config file can pass syntax checking but have structure
+        # that we do not expect. if so, we pass error information back
+        # in the object, which then needs to be checked by the caller.
+        try:
+            self.name = name
+            self.enabled = props.get('enabled', True)
+            self.random = props.get('random', 0)
+            self.sched = sorted(props['sched'], reverse=True, key=lambda t: t[0])
+        except Exception as e:
+            logger.error(f'Unexpected structure in config file: {str(e)}')
+            self.name = 'error'
+            self.error_msg = str(e)
+            return
 
         # we keep the schedule item that was in effect the last time that a
         # new state was sent to the remote, i.e. the last call to process()
@@ -134,7 +144,10 @@ class Controller:
         parser = argparse.ArgumentParser(
             description='Timer main: Control program for remote timers.',
             epilog='Manages schedules and communicates with one or more remote timers.')
-        parser.add_argument("-s", "--syntax", help="Check config file for syntax errors and exit.", action="store_true")
+        parser.add_argument('-s', '--syntax', action='store_true',
+            help='Check config file for syntax errors and exit.')
+        parser.add_argument('-c', '--config', default='config.yaml',
+            help='Optional config file name, defaults to config.yaml.')
         self.args = parser.parse_args()
 
         if not self.args.syntax:
@@ -157,24 +170,31 @@ class Controller:
         # then the program will continue running but will do nothing
         # as the dictionary will be empty.
         try:
-            filename = 'config.yaml'
+            filename = self.args.config
             d = {}
             with open(filename, 'r') as yamlfile:
                 d = yaml.safe_load(yamlfile)
-                logger.debug('Config file parsed successfully.')
+                logger.debug(f'Config file parsed successfully: {filename}')
         except Exception as e:
-            logger.error('Error parsing config file!')
+            logger.error(f'Error parsing config file: {filename}')
             if self.args.syntax:
-                print(f'\nParse failed!\n\n{str(e)}')
+                print(f'\nParse failed!\n{str(e)}')
                 sys.exit(1)
 
         # instantiate Remote objects and add them to the list
         for k, v in d.items():
-            self.remotes.append(Remote(k, v))
+            r = Remote(k, v)
+            if r.name == 'error':
+                if self.args.syntax:
+                    print('\nParse failed!')
+                    print(f'Unexpected structure in config file: {r.error_msg}')
+                    sys.exit(1)
+            else:
+                self.remotes.append(r)
 
         # if syntax check, print the config information.
         if self.args.syntax:
-            print('\nConfiguration file parsed successfully!')
+            print(f'\nConfiguration file parsed successfully: {filename}')
             for r in self.remotes:
                 r.print()
             logger.info('Exiting: Syntax check only.')
