@@ -1,4 +1,7 @@
 #!/home/jack/.venv/bin/python3
+#
+# TODO: Add command line argument to read alternate config file.
+# TODO: Process schedules a week at a time, not a day at a time.
 
 import logging
 import signal
@@ -14,7 +17,7 @@ def main():
     controller = timer.Controller(__file__)
     logger = logging.getLogger('timer_main')
 
-    # register signal handlers
+    # register the signal handlers
     signal.signal(signal.SIGINT,  sigint_handler)
     signal.signal(signal.SIGTERM, sigterm_handler)
     signal.signal(signal.SIGHUP,  sighup_handler)
@@ -22,9 +25,12 @@ def main():
     controller.init_controller()
 
     while True:
-        controller.sleep_minute()
-        controller.process_retries()
-        controller.process()
+        if controller.mqtt_connected:
+            controller.sleep_minute()
+            controller.process_retries()
+            controller.process()
+        else:
+            time.sleep(10)
 
 
 # signal handler for SIGINT: terminate program

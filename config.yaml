@@ -2,12 +2,14 @@
 #
 # Each timer is denoted by a unique name starting in column 1.
 # Each timer has the following properties. Property names must be lower case:
-#   sched  - A list of lists, denoting on/off times and days.
-#   random - An optional property which defaults to zero if not given.
-#            This is the maximum number of minutes the time may be adjusted
-#            to give a "lived-in" look when timing lights. A different
-#            random adjustment is calculated daily.
-#            The random feature is not implemented yet.
+#   sched   - A list of lists, denoting on/off times and days. Details below.
+#   enabled - Optional true or false; defaults to true if not given,
+#             case insensitive.
+#   random  - Optional integer; defaults to zero if not given.
+#             This is the maximum number of minutes the time may be adjusted
+#             to give a "lived-in" look when timing lights. A different
+#             random adjustment is calculated daily.
+#             The random feature is not implemented yet.
 #
 # Each sched sub-list consists of three positional items, in this order:
 #   Time  - A 24-hour time, represented as an integer, hhmm, without
@@ -21,20 +23,34 @@
 
 picow2:
   sched: [
-    [1440, off, wed],
-    [1445, on, wed], 
-    [1450, off, wed],
-    [1455, on, wed],
-    [1500, off, wed], 
-    [1505, on, wed],
-    [1510, off, wed], 
-    [1515, on, wed],
-    [1520, off, wed], 
-    [1525, on, wed],
-    [1530, off, wed], 
-    [1535, on, wed],
-    [1540, off, wed], 
-    [1545, on, wed],
-    [1550, off, wed], 
-    [1555, on, wed],
-    [1600, off, wed] ]
+    [705, on, fri],
+    [710, off, fri],
+    [715, on, fri], 
+    [720, off, fri],
+    [725, on, fri], 
+    [730, off, fri],
+    [735, on, fri], 
+    [740, off, fri],
+    [745, on, fri], 
+    [750, off, fri],
+    [755, on, fri], 
+    [800, off, fri],
+    [805, on, fri],
+    [810, off, fri],
+    [815, on, fri], 
+    [820, off, fri],
+    [825, on, fri], 
+    [830, off, fri],
+    [835, on, fri], 
+    [840, off, fri],
+    [845, on, fri], 
+    [850, off, fri],
+    [855, on, fri], 
+    [900, off, fri] ]
+
+lamp_timer:
+    enabled: false
+    random: 30
+    sched: [
+        [1800, on, all],
+        [1130, off, all] ]
