@@ -4,14 +4,14 @@ import time
 logger = logging.getLogger('timer_main')
 
 class Remote:
-    """A single remote unit that we control with a schedule."""
+    """A single remote unit with a schedule."""
 
     def __init__(self, name, props):
         """props is a dictionary with keys sched and random. random is
         optional. sched is a list of lists giving the schedule for the
         remote. each sub-list is [time, state, days]"""
 
-        # the config file can pass syntax checking but have structure
+        # the config file can pass syntax checking but be structured in ways
         # that we do not expect. if so, we pass error information back
         # in the object, which then needs to be checked by the caller.
         try:

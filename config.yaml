@@ -35,12 +35,6 @@ mqtt:
 #           weekdays and weekends. Other values are silently ignored.
 
 remotes:
-  dehumid:
-    enabled: false
-    sched: [
-      [1400, off, weekdays],
-      [1900, on,  weekdays] ]
-
   picow2:
     sched: [
       [1405, on, fri],
@@ -95,9 +89,17 @@ remotes:
       [2230, off, fri],
       [2245, on, fri] ]
 
+  dehumidifier:
+    enabled: false
+    sched: [
+      [1400, off, weekdays],
+      [1900, on,  weekdays] ]
+
   lamp_timer:
     enabled: false
     random: 30
     sched: [
+      [600, on, all],
+      [830, off, all],
       [1800, on, all],
-      [1430, off, all] ]
+      [2300, off, all] ]
