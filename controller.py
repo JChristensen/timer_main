@@ -56,7 +56,7 @@ class Controller:
                 log_filename, when='midnight', backupCount=7)
         logger.addHandler(handler)
         f = logging.Formatter(
-                fmt='%(asctime)s.%(msecs)d\t%(levelname)s\t%(module)s\t%(message)s',
+                fmt='%(asctime)s.%(msecs)03d\t%(levelname)s\t%(module)s\t%(message)s',
                 datefmt='%Y-%m-%d %H:%M:%S')
         handler.setFormatter(f)
         logger.info(f'Start {version_info}')
@@ -293,7 +293,7 @@ class Controller:
         """Sleep until the minute rolls over."""
         now = time.time()
         l = time.localtime(now)
-        sleep_sec = 60 - l.tm_sec
+        sleep_sec = 60 - l.tm_sec - (now -int(now))
         time.sleep(sleep_sec)
         #print(time.strftime("%F %T"))
 
