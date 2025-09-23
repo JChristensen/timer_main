@@ -1,7 +1,5 @@
 #!/home/jack/.venv/bin/python3
 
-# TODO: Process schedules a week at a time, not a day at a time.
-
 import logging
 import signal
 import sys

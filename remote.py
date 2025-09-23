@@ -7,10 +7,14 @@ class Remote:
     """A single remote unit with a schedule."""
 
     def __init__(self, name, props):
-        """props is a dictionary with keys sched and random. random is
-        optional. sched is a list of lists giving the schedule for the
-        remote. each sub-list is [time, state, days]"""
+        """props is a dictionary with keys sched, random and enabled.
+        random and enabled are optional. sched is a list of lists giving
+        the schedule for the remote. each sub-list is [time, state, days].
+        we build self.sched and then use it to build the weekly
+        schedule, self.week_sched. we keep self.sched just to print
+        as part of the syntax check command line option."""
 
+        self.days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
         # the config file can pass syntax checking but be structured in ways
         # that we do not expect. if so, we pass error information back
         # in the object, which then needs to be checked by the caller.
@@ -32,12 +36,20 @@ class Remote:
         # make the days field lower case and expand special values
         for s in self.sched:
             s[2] = s[2].lower()
-            if s[2] == 'all':
-                s[2] = 'sun mon tue wed thu fri sat'
-            elif s[2] == 'weekdays':
-                s[2] = 'mon tue wed thu fri'
-            elif s[2] == 'weekends':
-                s[2] = 'sat sun'
+            if 'all' in s[2]:
+                s[2] = s[2].replace('all', 'sun mon tue wed thu fri sat')
+            if 'weekdays' in s[2]:
+                s[2] = s[2].replace('weekdays', 'mon tue wed thu fri')
+            if 'weekends' in s[2]:
+                s[2] = s[2].replace('weekends', 'sat sun')
+
+        # create the weekly schedule, store times as dhhmm
+        self.week_sched = []
+        for d, day in enumerate(self.days):
+            for s in self.sched:
+                if day in s[2]:
+                    self.week_sched.append([d * 10000 + s[0], s[1]])
+        self.week_sched.sort(reverse=True)
 
 
     def process(self):
@@ -45,24 +57,21 @@ class Remote:
         is different from the last time we checked, then return the list
         for the current schedule, else return an empty list."""
 
-        # calculate current time as an integer, hhmm, and get the current dow
-        localtime = time.localtime(time.time())
-        now = localtime.tm_hour * 100 + localtime.tm_min
-        day = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'][localtime.tm_wday]
-
-        # make a list of the schedules in effect for today
-        todays_sched = [s for s in self.sched if day in s[2]]
+        # calculate current time as an integer, dhhmm,
+        # where d is the day of the week (mon=0)
+        local = time.localtime(time.time())
+        now = local.tm_wday * 10000 + local.tm_hour * 100 + local.tm_min
 
         # find the current schedule item in effect.
         # if the current time is less than the earliest schedule, or greater
         # than or equal to the latest schedule, then the latest schedule is in
         # effect. remember, the schedules are sorted in reverse order.
-        if todays_sched:    # it is possible that there are none
-            if now < todays_sched[-1][0] or now >= todays_sched[0][0]:
-                current_sched = todays_sched[0]
+        if self.week_sched:     # it is possible that there are none
+            if now < self.week_sched[-1][0] or now >= self.week_sched[0][0]:
+                current_sched = self.week_sched[0]
             # else, step through the schedule items to find which is in effect
             else:
-                for s in todays_sched:
+                for s in self.week_sched:
                     if now >= s[0]:
                         current_sched = s
                         break
@@ -74,7 +83,7 @@ class Remote:
                 return []
 
 
-    def print(self):
+    def print(self, verbose):
         """print the schedule and related info for this remote.
         used when checking syntax."""
         print(f'\nRemote name: {self.name}')
@@ -83,3 +92,7 @@ class Remote:
         print('Schedule:')
         for s in sorted(self.sched):
             print(s)
+        if verbose:
+            print('Week schedule:')
+            for w in self.week_sched:
+                print(w)

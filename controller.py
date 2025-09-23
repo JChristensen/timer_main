@@ -47,6 +47,7 @@ class Controller:
         cmd.close()
         version_info = f'{self.prognamepy} PID {str(os.getpid())} {self.git_hash}'
         log_filename = f'{self.progpath}{os.sep}.{self.progname}.log'
+        self.days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 
         # set up logging
         global logger
@@ -69,6 +70,8 @@ class Controller:
             help='Check config file for syntax errors and exit.')
         parser.add_argument('-c', '--config', default='config.yaml',
             help='Optional config file name, defaults to config.yaml.')
+        # --verbose combined with --syntax prints the weekly schedules.
+        parser.add_argument('-v', '--verbose', action='store_true', help=argparse.SUPPRESS)
         self.args = parser.parse_args()
         self.write_pidfile()
 
@@ -134,7 +137,7 @@ class Controller:
         if self.args.syntax:
             print(f'\nConfiguration file parsed successfully: {filename}')
             for r in self.remotes:
-                r.print()
+                r.print(self.args.verbose)
             logger.info('Exiting: Syntax check only.')
             sys.exit(0)
 
@@ -255,7 +258,9 @@ class Controller:
                         hex_serial = f'{random.randrange(pow(2,32)):08x}'
                         self.retry[hex_serial] = [retry, r.name, sched]
                         self.mqClient.publish(r.name, f'{sched[1]} {hex_serial}')
-                        logger.debug(f'Publish {r.name} {sched} {hex_serial}')
+                        hhmm = sched[0] % 10000
+                        day = self.days[int(sched[0] / 10000)]
+                        logger.debug(f'Publish {r.name} {hhmm} {day} {sched[1]} {hex_serial}')
 
 
     def process_retries(self):
@@ -271,8 +276,10 @@ class Controller:
             hostname = v[1]
             sched = v[2]
             if v[0] > 0:
-                logger.debug(f'Retry {hostname} {sched} {serial}')
                 self.mqClient.publish(hostname, f'{sched[1]} {serial}')
+                hhmm = sched[0] % 10000
+                day = self.days[int(sched[0] / 10000)]
+                logger.debug(f'Retry {hostname} {hhmm} {day} {sched[1]} {serial}')
                 v[0] -= 1
             else:
                 logger.warning(f'Retries exhausted for {serial} {v}')
