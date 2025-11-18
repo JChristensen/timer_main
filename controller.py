@@ -23,11 +23,14 @@ class Controller:
         self.remotes = []
 
         # a dictionary containing schedules that have been sent to a remote
-        # but not acknowledged.
+        # but not acknowledged. dictionary items consist of:
+        # hex_serial: [retries_left, hostname, sched_list]
         self.retry = {}
 
         # a list of remote hostnames that are considered offline
-        # because they have not responded to a message.
+        # because they have not responded to a message. when a remote
+        # is added to the offline list, any retries for that hostname
+        # are removed from the retry dictionary.
         self.offline = []
 
         # the mqtt client and associated parameters
@@ -57,7 +60,7 @@ class Controller:
                 log_filename, when='midnight', backupCount=7)
         logger.addHandler(handler)
         f = logging.Formatter(
-                fmt='%(asctime)s.%(msecs)03d\t%(levelname)s\t%(module)s\t%(message)s',
+                fmt='%(asctime)s.%(msecs)03d\t%(levelname)s\t%(message)s',
                 datefmt='%Y-%m-%d %H:%M:%S')
         handler.setFormatter(f)
         logger.info(f'Start {version_info}')
@@ -193,41 +196,56 @@ class Controller:
 
 
     def on_message(self, mqClient, userdata, msg):
-        """The callback for when a PUBLISH message is received from the broker.
-        Process ack, reset, and pong (response to ping) messages here."""
+        """The callback for when a PUBLISH message is received from the
+        broker. Messages from remotes have 4 or 5 space-delimited fields:
+            hostname status serial hh:mm:ss rssi
+        the time stamp and rssi fields are not used by this program,
+        but are logged for informational purposes.
+        only the ack, ack_manual and pong messages include serial, as
+        these are responses to messages sent from this program.
+        ack: state change message received and state set.
+        ack_manual: state change message received, but the remote is
+                    in manual mode, so state not set.
+        pong: ping message received, echoing back the serial.
+        connected: sent when a remote connects to the mqtt broker.
+        automatic_mode, manual_mode: user has pressed button to switch mode.
+        manual_on, manual_off: user has pressed button to change state.
+        """
         global logger
         try:
             msgText = msg.payload.decode('utf-8')
-            ellipsis = '…' if len(msgText) > 32 else ''
             logger.debug(f'Received {msgText}')
-            # take the message apart, space-delimited
-            # three possible messages:
-            #   hostname ack serial hh:mm:ss
-            #   hostname reset hh:mm:ss
-            #   hostname pong hh:mm:ss (response to ping)
+            # unpack the fields, space-delimited
             msg = msgText.split()
-            if msg[1] == 'ack':
-                if msg[2] in self.retry:
-                    del self.retry[msg[2]]
-            elif msg[1] == 'pong' or msg[1] == 'reset':
-                hostname = msg[0]
-                # remove this remote from the offline list
-                while hostname in self.offline:
-                    self.offline.remove(hostname)
-                # also remove any items in the retry dictionary for this remote
-                remove = []
-                for serial, v in self.retry.items():
-                    if v[1] ==  hostname:
-                        remove.append(serial)
-                for s in remove:
-                    del self.retry[s]
-                logger.info(f'{msg[0]} is online.')
-                # now process the remotes, make sure we send state to the
-                # one that just came back online by clearing last_sched.
-                for r in self.remotes:
-                    if r.name == hostname:
-                        r.last_sched = []
-                self.process()
+            hostname = msg[0]
+            status = msg[1]
+            serial = msg[2]
+            if status in ['ack', 'ack_manual']:
+                if serial in self.retry:
+                    del self.retry[serial]
+                else:
+                    logger.warning(f'Received ack for {serial}, not in retry dict.')
+            elif status in ['pong', 'connected', 'automatic_mode', \
+                            'manual_mode', 'manual_on', 'manual_off']:
+                # if this remote is in the offline list, remove it
+                if hostname in self.offline:
+                    while hostname in self.offline:
+                        self.offline.remove(hostname)
+                    logger.info(f'{hostname} is online.')
+                    # also remove any items in the retry dictionary for this remote
+                    remove_list = []    # a list of dictionary items to remove
+                    for retry_serial, v in self.retry.items():
+                        retry_hostname = v[1]
+                        if hostname == retry_hostname:
+                            remove_list.append(serial)
+                    for s in remove_list:
+                        del self.retry[s]
+                    # now process the remotes, to ensure we send state to the
+                    # one that just came back online by clearing last_sched.
+                    for r in self.remotes:
+                        if r.name == hostname:
+                            r.last_sched = []
+                    self.process()
             else:
                 logger.warning(f'Unknown message, ignored: {msgText}')
         except Exception as e:
@@ -245,7 +263,7 @@ class Controller:
         for r in self.remotes:
             if r.enabled:
                 if r.name in self.offline:
-                    # just send a ping
+                    # send a ping but do not add to the retry dict
                     hex_serial = f'{random.randrange(pow(2,32)):08x}'
                     self.mqClient.publish(r.name, f'Ping {hex_serial}')
                     logger.debug(f'Ping {r.name} {hex_serial}')
@@ -270,7 +288,7 @@ class Controller:
 
         # as we process the retry dictionary items, we build this list of
         # dictionary items to be removed, i.e. those that are out of retries.
-        remove = []
+        remove_list = []
 
         for serial, v in self.retry.items():
             hostname = v[1]
@@ -283,12 +301,12 @@ class Controller:
                 v[0] -= 1
             else:
                 logger.warning(f'Retries exhausted for {serial} {v}')
-                remove.append(serial)
+                remove_list.append(serial)
 
-        # now we can remove the exhausted dictionary items and put them
-        # in the offline list.
-        # (python does not allow a dictionary to change size during iteration)
-        for k in remove:
+        # now we can remove the exhausted dictionary items and put
+        # those remotes in the offline list.
+        # (a dictionary cannot change size during iteration)
+        for k in remove_list:
             hostname = self.retry[k][1]
             del self.retry[k]
             if hostname not in self.offline:
