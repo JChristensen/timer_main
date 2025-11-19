@@ -240,8 +240,10 @@ class Controller:
                             remove_list.append(serial)
                     for s in remove_list:
                         del self.retry[s]
-                    # now process the remotes, to ensure we send state to the
-                    # one that just came back online by clearing last_sched.
+                # if this remote came back online or returned to automatic
+                # mode, process the remotes; ensure we send state to this
+                # remote by clearing last_sched.
+                if status in ['pong', 'connected', 'automatic_mode']:
                     for r in self.remotes:
                         if r.name == hostname:
                             r.last_sched = []

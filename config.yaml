@@ -41,7 +41,7 @@ remotes:
       [1400, off, weekdays],
       [1900, on,  weekdays] ]
 
-  pico2w2:
+  pico2w1:
     enabled: true
     sched: [
       [600, on, all],
@@ -49,7 +49,7 @@ remotes:
       [1830, on, all],
       [2130, off, all] ]
 
-  pico2w1:
+  pico2w2:
     enabled: true
     sched: [
       [0, off, all],
