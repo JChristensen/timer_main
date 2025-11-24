@@ -1,0 +1,14 @@
+# This file is /etc/systemd/system/timer_main.service
+[Unit]
+Description=Main control program for remoter timers.
+After=network.target
+
+[Service]
+Type=simple
+User=jack
+WorkingDirectory=/home/jack/proj/timer_main
+ExecStart=/home/jack/proj/timer_main/timer_main.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

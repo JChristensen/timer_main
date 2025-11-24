@@ -49,7 +49,8 @@ class Controller:
         self.git_hash = cmd.read().replace('\n', '')
         cmd.close()
         version_info = f'{self.prognamepy} PID {str(os.getpid())} {self.git_hash}'
-        log_filename = f'{self.progpath}{os.sep}.{self.progname}.log'
+        log_filename = f'{self.progpath}{os.sep}{self.progname}.log'
+        self.pid_filename = f'{self.progpath}{os.sep}{self.progname}.pid'
         self.days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 
         # set up logging
@@ -64,6 +65,7 @@ class Controller:
                 datefmt='%Y-%m-%d %H:%M:%S')
         handler.setFormatter(f)
         logger.info(f'Start {version_info}')
+        logger.debug(f'Working directory is {os.getcwd()}')
 
         # process command line arguments
         parser = argparse.ArgumentParser(
@@ -93,9 +95,6 @@ class Controller:
         self.offline = []
 
         # read the config file and convert to a dictionary object (d).
-        # if not just checking syntax, and parsing the config file fails,
-        # then the program will continue running but will do nothing
-        # as the dictionary will be empty.
         try:
             filename = self.args.config
             d = {}
@@ -103,10 +102,10 @@ class Controller:
                 d = yaml.safe_load(yamlfile)
                 logger.debug(f'Config file parsed successfully: {filename}')
         except Exception as e:
-            logger.error(f'Error parsing config file: {filename}')
+            logger.error(f'Error parsing config file {filename}: {str(e)}')
             if self.args.syntax:
                 print(f'\nParse failed!\n{str(e)}')
-                sys.exit(1)
+            sys.exit(1)
 
         # get the mqtt and remotes blocks from the config file.
         # if they do not exist, then generate an error.
@@ -120,10 +119,7 @@ class Controller:
             logger.error(f'Config file error: {str(e)}')
             if self.args.syntax:
                 print(f'Config file error: {str(e)}')
-                sys.exit(1)
-            else:
-                # this return will cause the program to keep running but doing nothing.
-                return
+            sys.exit(1)
 
         # instantiate Remote objects and add them to the list
         for k, v in remotes_d.items():
@@ -132,7 +128,7 @@ class Controller:
                 if self.args.syntax:
                     print('\nParse failed!')
                     print(f'Unexpected structure in config file: {r.error_msg}')
-                    sys.exit(1)
+                sys.exit(1)
             else:
                 self.remotes.append(r)
 
@@ -328,11 +324,11 @@ class Controller:
     def write_pidfile(self):
         """write our pid to a file."""
         if not self.args.syntax:
-            with open (f'{self.progname}.pid', 'w') as p:
+            with open (f'{self.pid_filename}', 'w') as p:
                 p.write(f'{str(os.getpid())}\n')
 
 
     def remove_pidfile(self):
         """remove the pid file. call when the program is terminating."""
         if not self.args.syntax:
-            os.remove(f'{self.progname}.pid')
+            os.remove(f'{self.pid_filename}')

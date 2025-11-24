@@ -35,20 +35,33 @@ mqtt:
 #           weekdays and weekends. Other values are silently ignored.
 
 remotes:
-  dehumidifier:
-    enabled: false
-    sched: [
-      [1400, off, weekdays],
-      [1900, on,  weekdays] ]
 
+  # generator battery charger
   pico2w1:
     enabled: true
     sched: [
-      [600, on, all],
+      [1230, on, sun],
+      [1330, off, sun] ]
+
+  # family room
+  rmt1:
+    enabled: true
+    sched: [
+      [445, on, all],
       [800, off, all],
-      [1830, on, all],
+      [1630, on, all],
       [2130, off, all] ]
 
+  # living room
+  rmt2:
+    enabled: true
+    sched: [
+      [500, on, all],
+      [800, off, all],
+      [1700, on, all],
+      [2200, off, all] ]
+
+  # test board
   pico2w2:
     enabled: true
     sched: [
