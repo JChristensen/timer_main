@@ -1,4 +1,5 @@
 import logging
+import random
 import time
 
 logger = logging.getLogger('timer_main')
@@ -48,8 +49,35 @@ class Remote:
         for d, day in enumerate(self.days):
             for s in self.sched:
                 if day in s[2]:
-                    self.week_sched.append([d * 10000 + s[0], s[1]])
+                    sched_time = d * 10000 + s[0]
+                    if self.random != 0:
+                        sched_time = self.randomize(sched_time)
+                    self.week_sched.append([sched_time, s[1]])
         self.week_sched.sort(reverse=True)
+
+
+    def randomize(self, t):
+        """given the schedule time t expressed as dhhmm, return a
+        randomly adjusted time by applying the random value for this remote.
+        if this would push the time into the next day, then set it to 2359
+        instead. if it would push it back into the previous day,
+        then set it to 0000."""
+
+        # save the day of the week, and convert the time to minutes
+        d = t // 10000
+        hhmm = t - d * 10000
+        hour = hhmm // 100
+        minute = hhmm - hour * 100
+        minutes = 60 * hour + minute
+
+        # apply the random factor
+        minutes += random.randint(-self.random, self.random)
+        # limit the randomized time to the current day
+        if minutes < 0:
+            minutes = 0
+        elif minutes > 1439:
+            minutes = 1439
+        return d * 10000 + 100 * (minutes // 60) + minutes % 60
 
 
     def process(self):
@@ -59,7 +87,7 @@ class Remote:
 
         # calculate current time as an integer, dhhmm,
         # where d is the day of the week (mon=0)
-        local = time.localtime(time.time())
+        local = time.localtime()
         now = local.tm_wday * 10000 + local.tm_hour * 100 + local.tm_min
 
         # find the current schedule item in effect.

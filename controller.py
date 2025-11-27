@@ -315,10 +315,10 @@ class Controller:
     def sleep_minute(self):
         """Sleep until the minute rolls over."""
         now = time.time()
-        l = time.localtime(now)
-        sleep_sec = 60 - l.tm_sec - (now -int(now))
+        loc = time.localtime(now)
+        sleep_sec = 60.0 - loc.tm_sec - (now - int(now)) + 0.0005
         time.sleep(sleep_sec)
-        #print(time.strftime("%F %T"))
+        now = time.time()
 
 
     def write_pidfile(self):

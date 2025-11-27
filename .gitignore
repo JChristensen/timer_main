@@ -1,0 +1,4 @@
+*.geany
+*.log*
+*.pid
+__pycache__/
