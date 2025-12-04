@@ -1,6 +1,6 @@
 # This file is /etc/systemd/system/timer_main.service
 [Unit]
-Description=Main control program for remoter timers.
+Description=Main control program for remote timers.
 After=network.target
 
 [Service]
