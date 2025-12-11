@@ -22,12 +22,12 @@ def main():
     # initialize
     controller.init_controller()
     last_mday = time.localtime().tm_mday
+    controller.sleep_minute()
 
     # main loop
     while True:
         if controller.mqtt_connected:
-            controller.sleep_minute()
-            t = time.localtime()
+            t = time.localtime(time.time() + 0.5)   # round up fractional seconds
             # time for the daily reprocess? (to generate any new random times)
             if t.tm_mday != last_mday:
                 last_mday = t.tm_mday
@@ -37,8 +37,9 @@ def main():
             else:
                 controller.process_retries()
                 controller.process()
+            controller.sleep_minute()
         else:
-            time.sleep(10)
+            time.sleep(1)
 
 
 # signal handler for SIGINT: terminate program

@@ -87,7 +87,7 @@ class Remote:
 
         # calculate current time as an integer, dhhmm,
         # where d is the day of the week (mon=0)
-        local = time.localtime()
+        local = time.localtime(time.time() + 0.5)   # round up fractional seconds
         now = local.tm_wday * 10000 + local.tm_hour * 100 + local.tm_min
 
         # find the current schedule item in effect.

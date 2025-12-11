@@ -1,4 +1,5 @@
 import argparse
+import datetime
 import logging
 import logging.handlers
 import paho.mqtt.client as mqtt
@@ -189,6 +190,7 @@ class Controller:
         global logger
         self.mqtt_connected = False
         logger.warning(f'Broker disconnect!')
+        time.sleep(1)
 
 
     def on_message(self, mqClient, userdata, msg):
@@ -314,11 +316,10 @@ class Controller:
 
     def sleep_minute(self):
         """Sleep until the minute rolls over."""
-        now = time.time()
-        loc = time.localtime(now)
-        sleep_sec = 60.0 - loc.tm_sec - (now - int(now)) + 0.0005
-        time.sleep(sleep_sec)
-        now = time.time()
+        n = datetime.datetime.now()
+        sleep_until = datetime.datetime(n.year, n.month, n.day, n.hour, n.minute, 0, 0) \
+                + datetime.timedelta(minutes=1)
+        time.sleep((sleep_until - n).total_seconds())
 
 
     def write_pidfile(self):
