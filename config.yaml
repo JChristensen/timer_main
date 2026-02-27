@@ -1,7 +1,7 @@
 # YAML configuration file for the timer_main.py program.
 # Sending SIGHUP to the program will cause it to reload the configuration
-# file. This should only be used to update schedules. If changes are
-# made to the MQTT parameters, then the program should be restarted.
+# file. This should only be used to update schedules. If changes are made
+# to the MQTT or location parameters, then the program should be restarted.
 
 # The mqtt block contains the hostname and port for the MQTT broker,
 # and the topic the program will subscribe to, in order to listen for
@@ -11,6 +11,13 @@ mqtt:
   broker: your_broker_hostname
   port: 1883  # or as desired
   topic: timer_main  # or as desired
+
+# The location block is optional, and is only needed if schedule times
+# contain sunrise or sunset.
+
+location:
+  lat: 45.8124
+  lon: -84.7285
 
 # The remotes block contains a sub-block for each remote timer to be managed.
 # Timer names must be unique. Each timer has the following properties
@@ -25,8 +32,11 @@ mqtt:
 #
 # Each sched sub-list item consists of three positional items, in this order:
 #   Time  - A 24-hour time, represented as an integer, hhmm, without
-#           a colon. Do not use leading zeros; this will cause the time
-#           to be interpreted as octal!
+#           a colon. Instead of hhmm, time can be 'sunrise' or 'sunset'. 
+#           Also allowed is an expression with 'sunrise' or 'sunset' and
+#           an offset given in minutes, e.g. 'sunrise-30' or 'sunset+120'.
+#           Do not use leading zeros with numeric values; this will cause
+#           them to be interpreted as octal, with unpredictable results.
 #   State - On, off, true or false. Case insensitive.
 #   Days  - A space-separated list of days giving the days the schedule
 #           item is effective. Case insensitive.
@@ -49,9 +59,9 @@ remotes:
     enabled: true
     sched: [
       [600, on, all],
-      [800, off, all],
+      [sunrise+30, off, all],
       [1800, on, all],
-      [2200, off, all] ]
+      [sunset, off, all] ]
 
   remote2:
     enabled: true

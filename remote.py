@@ -1,5 +1,6 @@
 import logging
 import random
+import re
 import time
 
 logger = logging.getLogger('timer_main')
@@ -7,7 +8,7 @@ logger = logging.getLogger('timer_main')
 class Remote:
     """A single remote unit with a schedule."""
 
-    def __init__(self, name, props):
+    def __init__(self, name, props, sunrise, sunset):
         """props is a dictionary with keys sched, random and enabled.
         random and enabled are optional. sched is a list of lists giving
         the schedule for the remote. each sub-list is [time, state, days].
@@ -16,19 +17,18 @@ class Remote:
         as part of the syntax check command line option."""
 
         self.days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
-        # the config file can pass syntax checking but be structured in ways
-        # that we do not expect. if so, we pass error information back
-        # in the object, which then needs to be checked by the caller.
+        self.sunrise = sunrise
+        self.sunset = sunset
+
+        # the config file can pass yaml syntax checking but be structured in
+        # ways that we do not expect. raise an exception if this happens.
         try:
             self.name = name
             self.enabled = props.get('enabled', True)
             self.random = props.get('random', 0)
-            self.sched = sorted(props['sched'], reverse=True, key=lambda t: t[0])
+            self.sched = props['sched']
         except Exception as e:
-            logger.error(f'Unexpected structure in config file: {str(e)}')
-            self.name = 'error'
-            self.error_msg = str(e)
-            return
+            raise Exception(f'Syntax error in config for {self.name}: {str(e)}')
 
         # we keep the schedule item that was in effect the last time that a
         # new state was sent to the remote, i.e. the last call to process()
@@ -44,6 +44,12 @@ class Remote:
             if 'weekends' in s[2]:
                 s[2] = s[2].replace('weekends', 'sat sun')
 
+        # check the schedule time for sunrise/sunset expression
+        for s in self.sched:
+            if type(s[0]) == str:
+                s[0] = self.convert_sun_expr(s[0])
+        self.sched.sort(reverse=True)
+
         # create the weekly schedule, store times as dhhmm
         self.week_sched = []
         for d, day in enumerate(self.days):
@@ -54,6 +60,58 @@ class Remote:
                         sched_time = self.randomize(sched_time)
                     self.week_sched.append([sched_time, s[1]])
         self.week_sched.sort(reverse=True)
+
+
+    def convert_sun_expr(self, expr):
+        """convert a sunrise/sunset expression to an integer time
+        in the form hhmm."""
+
+        # make an error message just in case
+        errmsg = f'Syntax error in config for {self.name}: {expr}'
+
+        # convert to lower case so we can match on 'sunrise' or 'sunset'
+        # and replace the words with the actual time
+        expr = expr.lower()
+        if 'sunrise' in expr:
+            expr = expr.replace('sunrise', str(self.sunrise))
+        elif 'sunset' in expr:
+            expr = expr.replace('sunset', str(self.sunset))
+
+        # parse the expression, which may be either a single number,
+        # i.e. sunrise or sunset time, or an expression of the form a +/- b.
+        regex=re.compile(r'(\d+)\s*(\S)?\s*(\d+)?')
+        m = regex.search(expr)
+        if not m:
+            raise Exception(errmsg) # no match at all
+        elif m.group(1) and m.group(2) and m.group(3):
+            if m.group(2) == '+':
+                return self.add_hhmm(int(m.group(1)), int(m.group(3)))
+            elif m.group(2) == '-':
+                return self.add_hhmm(int(m.group(1)), -int(m.group(3)))
+            else:
+                raise Exception(errmsg) # not plus or minus
+        elif m.group(1) and not m.group(2) and not m.group(3):
+            return int(m.group(1))  # no expression, just sunrise or sunset
+        else:
+            raise Exception(errmsg)
+
+
+    def add_hhmm(self, a, b):
+        """add two integers where the first is of the form hhmm and
+        the second is minutes. return the result as hhmm. if the result
+        would be < 0, then return zero; if > 2359, then return 2359."""
+
+        # convert both times to minutes
+        hour = a // 100
+        minute = a - hour * 100
+        a_minutes = 60 * hour + minute
+
+        sum_ab = a_minutes + b
+        if sum_ab < 0:
+            sum_ab = 0
+        elif sum_ab > 1439:
+            sum_ab = 1439
+        return 100 * (sum_ab // 60) + sum_ab % 60
 
 
     def randomize(self, t):

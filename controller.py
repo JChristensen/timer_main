@@ -11,6 +11,7 @@ import time
 import yaml
 
 import remote
+import Sunrise
 
 logger = logging.getLogger('timer_main')
 
@@ -101,9 +102,9 @@ class Controller:
             d = {}
             with open(filename, 'r') as yamlfile:
                 d = yaml.safe_load(yamlfile)
-                logger.debug(f'Config file parsed successfully: {filename}')
+                logger.debug(f'YAML parsed the config file successfully: {filename}')
         except Exception as e:
-            logger.error(f'Error parsing config file {filename}: {str(e)}')
+            logger.error(f'YAML error while parsing config file {filename}: {str(e)}')
             if self.args.syntax:
                 print(f'\nParse failed!\n{str(e)}')
             sys.exit(1)
@@ -122,13 +123,32 @@ class Controller:
                 print(f'Config file error: {str(e)}')
             sys.exit(1)
 
+        # get the optional location block from the config file.
+        # if not present, use defaults.
+        lat = 45.8124
+        lon = -84.7285
+        zenith = Sunrise.OFFICIAL_ZENITH
+        if 'location' in d:
+            try:
+                location_d = d['location']
+                lat = d['location'].get('lat', 45.8124)
+                lon = d['location'].get('lon', -84.7285)
+                zenith = d['location'].get('zenith', Sunrise.OFFICIAL_ZENITH)
+            except Exception as e:
+                logger.error(f'Config file location error: {str(e)}')
+                if self.args.syntax:
+                    print(f'Config file location error: {str(e)}')
+                sys.exit(1)
+        self.sun_init(lat, lon, zenith)
+
         # instantiate Remote objects and add them to the list
         for k, v in remotes_d.items():
-            r = remote.Remote(k, v)
-            if r.name == 'error':
+            try:
+                r = remote.Remote(k, v, self.sunrise, self.sunset)
+            except Exception as e:
+                logger.error(str(e))
                 if self.args.syntax:
-                    print('\nParse failed!')
-                    print(f'Unexpected structure in config file: {r.error_msg}')
+                    print(f'{str(e)}')
                 sys.exit(1)
             else:
                 self.remotes.append(r)
@@ -312,6 +332,22 @@ class Controller:
             if hostname not in self.offline:
                 self.offline.append(hostname)
             logger.warning(f'{hostname} is not responding.')
+
+
+    def sun_init(self, lat, lon, zenith):
+        """Calculate sunrise and sunset for the current day, and save
+        them in class attributes to pass to remote objects."""
+
+        sun = Sunrise.Sunrise(lat, lon, zenith)
+        epoch = time.time()
+        loc = time.localtime(epoch)
+        sunrise, sunset = sun.calc_rise_set(loc)
+        logger.debug(f'{time.strftime('%Y-%m-%d', loc)}' \
+            + f' Lat {lat} Lon {lon} Zenith {zenith}' \
+            + f' Sunrise {sunrise.tm_hour:02d}:{sunrise.tm_min:02d}' \
+            + f' Sunset {sunset.tm_hour:02d}:{sunset.tm_min:02d}')
+        self.sunrise = sunrise.tm_hour * 100 + sunrise.tm_min
+        self.sunset = sunset.tm_hour * 100 + sunset.tm_min
 
 
     def sleep_minute(self):
