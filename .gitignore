@@ -1,4 +1,6 @@
 *.geany
 *.log*
 *.pid
+*.ods
+jc_config.yaml
 __pycache__/

@@ -21,7 +21,9 @@ def main():
 
     # initialize
     controller.init_controller()
-    last_mday = time.localtime().tm_mday
+    t = time.localtime()
+    last_mday = t.tm_mday
+    last_dst = t.tm_isdst
     controller.sleep_minute()
 
     # main loop
@@ -31,7 +33,14 @@ def main():
             # time for the daily reprocess? (to generate any new random times)
             if t.tm_mday != last_mday:
                 last_mday = t.tm_mday
+                last_dst = t.tm_isdst
                 logger.debug(f'Starting daily schedule reprocess.')
+                controller.init_controller()
+                logger.debug(f'Reprocess complete.')
+            elif t.tm_isdst != last_dst:
+                last_dst = t.tm_isdst
+                last_mday = t.tm_mday
+                logger.debug(f'Starting schedule reprocess for {t.tm_zone}.')
                 controller.init_controller()
                 logger.debug(f'Reprocess complete.')
             else:
